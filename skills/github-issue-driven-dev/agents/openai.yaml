@@ -1,0 +1,7 @@
+interface:
+  display_name: "GitHub Issue-Driven Dev"
+  short_description: "GitHub Issue中心のAI開発ワークフロー"
+  default_prompt: "Use $github-issue-driven-dev to manage this coding task through GitHub Issues, branches, commits, PRs, and verification."
+
+policy:
+  allow_implicit_invocation: true
