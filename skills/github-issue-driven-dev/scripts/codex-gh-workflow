@@ -1,0 +1,453 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+CONFIG_FILE="${CODEX_GH_WORKFLOW_CONFIG:-$HOME/.codex/github-issue-driven-dev/config.env}"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+fi
+
+GH_BIN="${GH_BIN:-}"
+if [[ -z "$GH_BIN" ]]; then
+  if command -v gh >/dev/null 2>&1; then
+    GH_BIN="$(command -v gh)"
+  elif [[ -x /opt/homebrew/bin/gh ]]; then
+    GH_BIN="/opt/homebrew/bin/gh"
+  elif [[ -x /usr/local/bin/gh ]]; then
+    GH_BIN="/usr/local/bin/gh"
+  fi
+fi
+
+die() {
+  printf 'エラー: %s\n' "$*" >&2
+  exit 1
+}
+
+need_git_repo() {
+  git rev-parse --show-toplevel >/dev/null 2>&1 || die "Gitリポジトリ内で実行してください"
+}
+
+has_gh() {
+  [[ -n "${GH_BIN:-}" && -x "$GH_BIN" ]]
+}
+
+repo_full_name() {
+  local remote url
+  remote="${1:-origin}"
+  url="$(git remote get-url "$remote" 2>/dev/null || true)"
+  [[ -n "$url" ]] || return 1
+  case "$url" in
+    git@github.com:*) printf '%s\n' "${url#git@github.com:}" | sed 's/\.git$//' ;;
+    https://github.com/*) printf '%s\n' "${url#https://github.com/}" | sed 's/\.git$//' ;;
+    *) return 1 ;;
+  esac
+}
+
+slugify() {
+  printf '%s' "$*" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+    | cut -c1-60
+}
+
+require_japanese_title() {
+  local title="$1"
+  if [[ ! "$title" =~ [ぁ-んァ-ン一-龯々ー] ]]; then
+    die "タスク名は必ず日本語にしてください"
+  fi
+}
+
+require_repo_prefix() {
+  local title="$1"
+  local repo_name="$2"
+  [[ -n "$repo_name" ]] || return 0
+  if [[ "$title" != "【${repo_name}】"* ]]; then
+    die "タスク名の先頭に 【${repo_name}】 を付けてください"
+  fi
+}
+
+cmd_status() {
+  need_git_repo
+  local root branch repo
+  root="$(git rev-parse --show-toplevel)"
+  branch="$(git branch --show-current 2>/dev/null || true)"
+  repo="$(repo_full_name origin || true)"
+
+  printf 'repo_root=%s\n' "$root"
+  printf 'branch=%s\n' "${branch:-detached}"
+  printf 'github_repo=%s\n' "${repo:-unknown}"
+  printf 'gh_cli=%s\n' "$(has_gh && printf '%s' "$GH_BIN" || printf no)"
+  if has_gh; then
+    "$GH_BIN" auth status >/dev/null 2>&1 && printf 'gh_auth=yes\n' || printf 'gh_auth=no\n'
+    "$GH_BIN" project list --owner "${GITHUB_PROJECT_OWNER:-$(printf '%s' "$repo" | cut -d/ -f1)}" --limit 1 >/dev/null 2>&1 \
+      && printf 'gh_project_access=yes\n' \
+      || printf 'gh_project_access=no\n'
+  fi
+  printf 'project_owner=%s\n' "${GITHUB_PROJECT_OWNER:-}"
+  printf 'project_number=%s\n' "${GITHUB_PROJECT_NUMBER:-}"
+  printf 'project_board_view_url=%s\n' "${GITHUB_PROJECT_BOARD_VIEW_URL:-${GITHUB_PROJECT_URL:-}}"
+  printf 'dirty_files=%s\n' "$(git status --short | wc -l | tr -d ' ')"
+  git status --short
+}
+
+cmd_board_url() {
+  printf '%s\n' "${GITHUB_PROJECT_BOARD_VIEW_URL:-${GITHUB_PROJECT_URL:-https://github.com/users/nanameru/projects/3/views/3}}"
+}
+
+cmd_draft_issue() {
+  need_git_repo
+  local title="" body_file="" repo issue_url draft_dir draft_file ts
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --title) title="${2:-}"; shift 2 ;;
+      --body-file) body_file="${2:-}"; shift 2 ;;
+      --repo) repo="${2:-}"; shift 2 ;;
+      *) die "draft-issue の不明な引数です: $1" ;;
+    esac
+  done
+  [[ -n "$title" ]] || die "--title が必要です"
+  [[ -n "$body_file" && -f "$body_file" ]] || die "--body-file には既存ファイルを指定してください"
+  repo="${repo:-$(repo_full_name origin || true)}"
+  local repo_name="${repo##*/}"
+  require_japanese_title "$title"
+  require_repo_prefix "$title" "$repo_name"
+
+  if has_gh && "$GH_BIN" auth status >/dev/null 2>&1 && [[ -n "$repo" ]]; then
+    issue_url="$("$GH_BIN" issue create --repo "$repo" --title "$title" --body-file "$body_file")"
+    printf '%s\n' "$issue_url"
+    if [[ -n "${GITHUB_PROJECT_OWNER:-}" && -n "${GITHUB_PROJECT_NUMBER:-}" ]]; then
+      "$GH_BIN" project item-add "$GITHUB_PROJECT_NUMBER" --owner "$GITHUB_PROJECT_OWNER" --url "$issue_url" >/dev/null || true
+      printf 'Projectボード: %s\n' "${GITHUB_PROJECT_BOARD_VIEW_URL:-${GITHUB_PROJECT_URL:-}}"
+    fi
+    return 0
+  fi
+
+  draft_dir="$(git rev-parse --show-toplevel)/.codex/issue-drafts"
+  mkdir -p "$draft_dir"
+  ts="$(date +%Y%m%d-%H%M%S)"
+  draft_file="$draft_dir/${ts}-$(slugify "$title").md"
+  {
+    printf '# %s\n\n' "$title"
+    cat "$body_file"
+  } > "$draft_file"
+  printf 'GitHub CLIまたは認証が使えないため、ローカルIssueドラフトを作成しました: %s\n' "$draft_file"
+}
+
+cmd_start() {
+  need_git_repo
+  local issue="" slug=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --issue) issue="${2:-}"; shift 2 ;;
+      --slug) slug="${2:-}"; shift 2 ;;
+      *) die "start の不明な引数です: $1" ;;
+    esac
+  done
+  [[ "$issue" =~ ^[0-9]+$ ]] || die "--issue には数値を指定してください"
+  slug="$(slugify "${slug:-issue-$issue}")"
+  git switch -c "issue-${issue}-${slug}"
+}
+
+cmd_install_hooks() {
+  need_git_repo
+  local root hooks
+  root="$(git rev-parse --show-toplevel)"
+  hooks="$root/.git/hooks"
+  mkdir -p "$hooks"
+  cat > "$hooks/prepare-commit-msg" <<'HOOK'
+#!/usr/bin/env bash
+set -euo pipefail
+
+message_file="${1:-}"
+[[ -n "$message_file" && -f "$message_file" ]] || exit 0
+
+branch="$(git branch --show-current 2>/dev/null || true)"
+issue=""
+if [[ "$branch" =~ (^|[-_/])(issue|gh)?[-_/]?([0-9]+)([-_/]|$) ]]; then
+  issue="${BASH_REMATCH[3]}"
+fi
+
+[[ -n "$issue" ]] || exit 0
+grep -Eq "(Refs|Closes|Fixes) #[0-9]+" "$message_file" && exit 0
+
+printf '\nRefs #%s\n' "$issue" >> "$message_file"
+HOOK
+  cat > "$hooks/commit-msg" <<'HOOK'
+#!/usr/bin/env bash
+set -euo pipefail
+
+require="$(git config --get codex.requireIssueRef || printf '%s' "${CODEX_REQUIRE_ISSUE_REF:-0}")"
+[[ "$require" == "1" || "$require" == "true" ]] || exit 0
+
+message_file="${1:-}"
+[[ -n "$message_file" && -f "$message_file" ]] || exit 0
+
+if grep -Eq "(Refs|Closes|Fixes) #[0-9]+" "$message_file"; then
+  exit 0
+fi
+
+branch="$(git branch --show-current 2>/dev/null || true)"
+if [[ "$branch" =~ (^|[-_/])(issue|gh)?[-_/]?[0-9]+([-_/]|$) ]]; then
+  exit 0
+fi
+
+cat >&2 <<'EOF'
+Commit blocked by Codex issue-driven workflow.
+
+Use a branch like issue-123-short-title or include one of these in the commit message:
+  Refs #123
+  Closes #123
+  Fixes #123
+
+To disable for this repository:
+  git config codex.requireIssueRef false
+EOF
+exit 1
+HOOK
+  chmod +x "$hooks/prepare-commit-msg" "$hooks/commit-msg"
+  git config codex.requireIssueRef "${CODEX_REQUIRE_ISSUE_REF:-1}"
+  printf 'Codex Git hooksを導入しました: %s\n' "$hooks"
+}
+
+cmd_install_repo_templates() {
+  need_git_repo
+  local root repo repo_name
+  root="$(git rev-parse --show-toplevel)"
+  repo="$(repo_full_name origin || true)"
+  repo_name="${repo##*/}"
+  repo_name="${repo_name:-repo}"
+  mkdir -p "$root/.github/ISSUE_TEMPLATE" "$root/.github/workflows"
+
+  [[ -f "$root/.github/ISSUE_TEMPLATE/feature.yml" ]] || cat > "$root/.github/ISSUE_TEMPLATE/feature.yml" <<YAML
+name: 機能追加
+description: プロダクトや開発上の変更を依頼・定義する
+title: "【${repo_name}】[機能]: "
+labels: ["type: feature", "status: inbox"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目的
+      description: 何を、なぜ変更するか
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件
+      description: 完了時に満たすべき条件
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: knowledge
+    attributes:
+      label: ナレッジログ
+      description: 判断、発見、実行コマンド、CI結果、フォローアップ
+YAML
+
+  [[ -f "$root/.github/ISSUE_TEMPLATE/bug.yml" ]] || cat > "$root/.github/ISSUE_TEMPLATE/bug.yml" <<YAML
+name: バグ
+description: 不具合やリグレッションを報告する
+title: "【${repo_name}】[バグ]: "
+labels: ["type: bug", "status: inbox"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: 現在の挙動
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する挙動
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 再現手順
+      value: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: knowledge
+    attributes:
+      label: ナレッジログ
+YAML
+
+  [[ -f "$root/.github/pull_request_template.md" ]] || cat > "$root/.github/pull_request_template.md" <<'MD'
+## 概要
+
+## 関連Issue
+
+Closes #
+
+## 検証
+
+- [ ] ローカルでテスト・lint・buildを実行
+- [ ] CIが通る
+
+## リスク
+
+## 追加した知見
+
+MD
+
+  [[ -f "$root/.github/workflows/ci.yml" ]] || cat > "$root/.github/workflows/ci.yml" <<'YAML'
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        if: hashFiles('package.json') != ''
+        with:
+          node-version: 22
+      - name: Node依存関係をインストール
+        if: hashFiles('package-lock.json') != ''
+        run: npm ci
+      - name: Nodeプロジェクトを検証
+        if: hashFiles('package.json') != ''
+        run: |
+          npm run lint --if-present
+          npm run typecheck --if-present
+          npm test --if-present
+          npm run build --if-present
+      - uses: actions/setup-python@v5
+        if: hashFiles('pyproject.toml') != ''
+        with:
+          python-version: '3.12'
+      - name: Pythonプロジェクトを検証
+        if: hashFiles('pyproject.toml') != ''
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]' || python -m pip install -e .
+          if python - <<'PY'
+          import importlib.util
+          raise SystemExit(0 if importlib.util.find_spec("pytest") else 1)
+          PY
+          then
+            python -m pytest -q
+          else
+            echo "pytestが入っていないためPythonテストをスキップします"
+          fi
+YAML
+
+  printf '不足していたGitHubテンプレートとworkflowを導入しました: %s/.github\n' "$root"
+}
+
+cmd_install_repo_labels() {
+  need_git_repo
+  has_gh || die "gh CLIが見つかりません"
+  "$GH_BIN" auth status >/dev/null 2>&1 || die "gh CLIが認証されていません"
+  local repo
+  repo="$(repo_full_name origin || true)"
+  [[ -n "$repo" ]] || die "originからGitHubリポジトリを判定できません"
+
+  "$GH_BIN" label create "status: inbox" --repo "$repo" --color "ededed" --description "New work that needs triage" --force
+  "$GH_BIN" label create "status: ready" --repo "$repo" --color "c5def5" --description "Ready to start" --force
+  "$GH_BIN" label create "status: blocked" --repo "$repo" --color "d73a4a" --description "Blocked by a dependency or decision" --force
+  "$GH_BIN" label create "type: feature" --repo "$repo" --color "0e8a16" --description "Product or capability work" --force
+  "$GH_BIN" label create "type: bug" --repo "$repo" --color "d73a4a" --description "Defect or regression" --force
+  "$GH_BIN" label create "type: chore" --repo "$repo" --color "fef2c0" --description "Maintenance work" --force
+  "$GH_BIN" label create "type: docs" --repo "$repo" --color "0075ca" --description "Documentation work" --force
+  "$GH_BIN" label create "type: research" --repo "$repo" --color "5319e7" --description "Investigation or discovery" --force
+  "$GH_BIN" label create "type: security" --repo "$repo" --color "b60205" --description "Security-related work" --force
+  "$GH_BIN" label create "priority: p0" --repo "$repo" --color "b60205" --description "Critical priority" --force
+  "$GH_BIN" label create "priority: p1" --repo "$repo" --color "d93f0b" --description "High priority" --force
+  "$GH_BIN" label create "priority: p2" --repo "$repo" --color "fbca04" --description "Normal priority" --force
+  "$GH_BIN" label create "priority: p3" --repo "$repo" --color "c2e0c6" --description "Low priority" --force
+  printf '標準ラベルを導入しました: %s\n' "$repo"
+}
+
+cmd_install_repo_instructions() {
+  need_git_repo
+  local root target template marker
+  root="$(git rev-parse --show-toplevel)"
+  target="$root/AGENTS.md"
+  template="${CODEX_GH_WORKFLOW_AGENTS_TEMPLATE:-$SKILL_DIR/assets/repo-AGENTS-template.md}"
+  marker="Repository GitHub Issue-Driven Development"
+  [[ -f "$template" ]] || die "テンプレートが見つかりません: $template"
+
+  if [[ -f "$target" ]] && grep -Fq "$marker" "$target"; then
+    printf 'リポジトリ指示はすでに導入済みです: %s\n' "$target"
+    return 0
+  fi
+
+  if [[ -s "$target" ]]; then
+    {
+      printf '\n\n'
+      cat "$template"
+    } >> "$target"
+  else
+    cp "$template" "$target"
+  fi
+  printf 'リポジトリ指示を導入しました: %s\n' "$target"
+}
+
+cmd_install_bin() {
+  local bin_dir="${1:-${CODEX_GH_WORKFLOW_BIN_DIR:-$HOME/.local/bin}}"
+  mkdir -p "$bin_dir"
+  ln -sf "$SCRIPT_DIR/codex-gh-workflow" "$bin_dir/codex-gh-workflow"
+  printf 'codex-gh-workflow を導入しました: %s/codex-gh-workflow\n' "$bin_dir"
+  printf 'PATHに含まれていない場合は追加してください: export PATH="%s:$PATH"\n' "$bin_dir"
+}
+
+cmd_create_project() {
+  local owner="${GITHUB_PROJECT_OWNER:-}" title="AI開発ボード"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --owner) owner="${2:-}"; shift 2 ;;
+      --title) title="${2:-}"; shift 2 ;;
+      *) die "create-project の不明な引数です: $1" ;;
+    esac
+  done
+  [[ -n "$owner" ]] || die "--owner または GITHUB_PROJECT_OWNER が必要です"
+  has_gh || die "gh CLIが見つかりません"
+  "$GH_BIN" auth status >/dev/null 2>&1 || die "gh CLIが認証されていません"
+  "$GH_BIN" project create --owner "$owner" --title "$title"
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  codex-gh-workflow status
+  codex-gh-workflow board-url
+  codex-gh-workflow draft-issue --title "..." --body-file issue.md [--repo owner/name]
+  codex-gh-workflow start --issue 123 --slug short-title
+  codex-gh-workflow install-hooks
+  codex-gh-workflow install-repo-instructions
+  codex-gh-workflow install-repo-templates
+  codex-gh-workflow install-repo-labels
+  codex-gh-workflow install-bin [bin-dir]
+  codex-gh-workflow create-project --owner OWNER --title "AI開発ボード"
+EOF
+}
+
+case "${1:-}" in
+  status) shift; cmd_status "$@" ;;
+  board-url) shift; cmd_board_url "$@" ;;
+  draft-issue) shift; cmd_draft_issue "$@" ;;
+  start) shift; cmd_start "$@" ;;
+  install-hooks) shift; cmd_install_hooks "$@" ;;
+  install-repo-instructions) shift; cmd_install_repo_instructions "$@" ;;
+  install-repo-templates) shift; cmd_install_repo_templates "$@" ;;
+  install-repo-labels) shift; cmd_install_repo_labels "$@" ;;
+  install-bin) shift; cmd_install_bin "$@" ;;
+  create-project) shift; cmd_create_project "$@" ;;
+  -h|--help|help|"") usage ;;
+  *) die "不明なコマンドです: $1" ;;
+esac
