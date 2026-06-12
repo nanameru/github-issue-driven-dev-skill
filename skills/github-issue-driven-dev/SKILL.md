@@ -7,6 +7,12 @@ metadata:
 
 # GitHub Issue-Driven Development
 
+## Parent Skill
+
+When this Skill is used as part of autonomous or scheduled development loops, first read `~/.agents/skills/loop-engineering-core/SKILL.md` if it exists. If it is missing, continue with this Skill and report that the parent Skill was unavailable.
+
+The parent owns shared loop rules (requirements gate, maker/checker separation, hard stops, Draft PR stop points). This Skill owns the GitHub Issue / branch / PR / Project workflow details.
+
 Use this skill when a user asks for coding, product development, refactoring, bug fixes, app work, GitHub Issues / Projects / PR workflow setup, or reusable AI development process guidance, unless they explicitly ask for investigation only, a short answer only, or no code changes.
 
 ## Quick Command
