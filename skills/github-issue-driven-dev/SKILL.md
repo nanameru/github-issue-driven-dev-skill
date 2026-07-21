@@ -9,9 +9,26 @@ metadata:
 
 ## Parent Skill
 
-When this Skill is used as part of autonomous or scheduled development loops, first read `~/.agents/skills/loop-engineering-core/SKILL.md` if it exists. If it is missing, continue with this Skill and report that the parent Skill was unavailable.
+When this Skill is used for implementation or as part of autonomous or scheduled development loops, first read `~/.agents/skills/loop-engineering-core/SKILL.md` if it exists. If it is missing, continue with this Skill and report that the parent Skill was unavailable.
 
 The parent owns shared loop rules (requirements gate, maker/checker separation, hard stops, Draft PR stop points). This Skill owns the GitHub Issue / branch / PR / Project workflow details.
+
+## One Issue, One Goal Loop
+
+Map the parent Issue Goal Loop onto GitHub. Treat one ready Issue as the durable container for one bounded goal loop and at most one Draft PR. Do not create a new Issue for each iteration.
+
+Before implementation, ensure the Issue contains:
+
+- loop goal, purpose, scope, and non-goals
+- observable acceptance criteria
+- linked tests or `test-board.yaml` cases and verification plan
+- complete and blocked exit conditions
+- hard stops, including attempt, cost, time, environment, and approval limits
+- an iteration knowledge log
+
+For each iteration, read the same Issue, select the smallest unmet acceptance criterion, run the needed workflow stage, perform a separate checker pass, and append evidence, failures, the current unmet condition, and the next action. Re-evaluate the whole Issue after every iteration.
+
+Close the loop only by creating or updating its Draft PR after all criteria pass, or by leaving the Issue open with a blocked report that records the cause, attempts, required human decision, and exact resume point. Split a follow-up Issue only when discovered work changes the approved scope or delivers independent value.
 
 Use this skill when a user asks for coding, product development, refactoring, bug fixes, app work, GitHub Issues / Projects / PR workflow setup, or reusable AI development process guidance, unless they explicitly ask for investigation only, a short answer only, or no code changes.
 
@@ -49,7 +66,7 @@ scripts/codex-gh-workflow install-bin
 2. Create or identify a GitHub Issue before implementation.
    - Title format: `【repo名】日本語タイトル`
    - Body language: Japanese
-   - Include purpose, scope, acceptance criteria, implementation plan, test / CI plan, and knowledge log.
+   - Include the One Issue, One Goal Loop fields above, implementation plan, test / CI plan, and knowledge log.
    - If GitHub write access is unavailable, create a local draft under `.codex/issue-drafts/` or `.codex/issue-knowledge/`.
 3. If requirements are vague, do a short Goal Prepare:
    - restate the goal
@@ -72,11 +89,14 @@ scripts/codex-gh-workflow start --issue 123 --slug short-title
 7. Run relevant quality gates before completion.
    - Prefer repo-native `test`, `lint`, `typecheck`, and `build`.
    - Report any gate that could not run and why.
-8. Create a Draft PR for substantial work.
+8. Re-evaluate every acceptance criterion after the checker pass.
+   - Continue the same Issue goal loop while safe, in scope, and incomplete.
+   - Stop with a blocked report when a parent hard stop is reached.
+9. Create a Draft PR for substantial completed work.
    - PR title format: `【repo名】日本語タイトル`
    - PR body language: Japanese
    - Include `Closes #123`, summary, verification, and risk.
-9. Add or reference the Issue / PR in the cross-repo GitHub Project when configured.
+10. Add or reference the Issue / PR in the cross-repo GitHub Project when configured.
    - Show the board view URL after adding or referencing board work:
 
 ```text

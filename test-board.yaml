@@ -1,0 +1,20 @@
+version: 1
+project:
+  name: "github-issue-driven-dev-skill"
+  test_command: "python3 tests/test_issue_goal_loop.py"
+  repo: "nanameru/github-issue-driven-dev-skill"
+
+source_roots: [skills, tests]
+
+cases:
+  - id: TC-001
+    title: "Issue本文とテンプレートでゴールループを追跡できる"
+    feature: "GitHub Issueゴールループ"
+    scenario: "1 Issue内の周回ログからDraft PRまたはblocked reportまで追跡する"
+    status: done
+    priority: high
+    type: regression
+    source: [skills/github-issue-driven-dev/SKILL.md, skills/github-issue-driven-dev/assets/repo-AGENTS-template.md, skills/github-issue-driven-dev/scripts/codex-gh-workflow]
+    test_file: "tests/test_issue_goal_loop.py"
+    issues: [6]
+    notes: "Skill契約、repo向けAGENTS、生成されるfeature/bug Issueテンプレートを検証する。"
