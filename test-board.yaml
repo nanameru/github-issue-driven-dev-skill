@@ -1,7 +1,7 @@
 version: 1
 project:
   name: "github-issue-driven-dev-skill"
-  test_command: "python3 tests/test_issue_goal_loop.py"
+  test_command: "python3 -m unittest discover -s tests -p 'test_*.py'"
   repo: "nanameru/github-issue-driven-dev-skill"
 
 source_roots: [skills, tests]
@@ -18,3 +18,14 @@ cases:
     test_file: "tests/test_issue_goal_loop.py"
     issues: [6]
     notes: "Skill契約、repo向けAGENTS、生成されるfeature/bug Issueテンプレートを検証する。"
+  - id: TC-002
+    title: "GitHub IssueからBeads Epicと子TODOを一意に生成できる"
+    feature: "Issue→Beads TODO連携"
+    scenario: "同じ計画を再適用してもIDを維持し、依存関係に従って実行可能TODOを選ぶ"
+    status: done
+    priority: high
+    type: regression
+    source: [skills/github-issue-driven-dev/SKILL.md, skills/github-issue-driven-dev/scripts/issue_to_beads.py]
+    test_file: "tests/test_issue_to_beads.py"
+    issues: [6]
+    notes: "dry-run、入力検証、管理ブロック、冪等作成、親子関係、依存関係、bd readyを検証する。"
