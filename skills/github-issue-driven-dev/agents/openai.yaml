@@ -1,7 +1,7 @@
 interface:
   display_name: "GitHub Issue-Driven Dev"
-  short_description: "GitHub Issue中心のAI開発ワークフロー"
-  default_prompt: "Use $github-issue-driven-dev to manage this coding task through GitHub Issues, branches, commits, PRs, and verification."
+  short_description: "GitHub IssueとBeads中心のAI開発ワークフロー"
+  default_prompt: "Use $github-issue-driven-dev to turn one GitHub Issue into linked Beads TODOs, implement them on an issue branch, verify the result, and update a Draft PR."
 
 policy:
   allow_implicit_invocation: true
