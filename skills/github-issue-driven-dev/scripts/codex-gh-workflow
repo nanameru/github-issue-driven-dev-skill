@@ -229,24 +229,42 @@ body:
   - type: textarea
     id: goal
     attributes:
-      label: 目的
-      description: 何を、なぜ変更するか
+      label: ループゴール
+      description: このIssueで誰の何を改善し、何をもって価値が届いたとするか
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 対象範囲・対象外
+      description: このIssueで扱う範囲と、別Issueへ分ける範囲
     validations:
       required: true
   - type: textarea
     id: acceptance
     attributes:
-      label: 完了条件
-      description: 完了時に満たすべき条件
+      label: 受入条件
+      description: 利用者から観察できる合格条件
       value: |
         - [ ]
     validations:
       required: true
   - type: textarea
+    id: verification
+    attributes:
+      label: 検証方法・終了条件・強制停止条件
+      description: 必須テストと証拠、Draft PRへ進む条件、blocked reportへ切り替える条件
+      value: |
+        - 検証:
+        - 完成: 全受入条件・gate・checkerが合格し、証拠付きDraft PRがある
+        - 停止: 同一原因の上限到達、要件・secret・環境・人間承認待ち
+    validations:
+      required: true
+  - type: textarea
     id: knowledge
     attributes:
-      label: ナレッジログ
-      description: 判断、発見、実行コマンド、CI結果、フォローアップ
+      label: 周回ナレッジログ
+      description: 各周回の未達成条件、判断、証拠、失敗、次の行動
 YAML
 
   [[ -f "$root/.github/ISSUE_TEMPLATE/bug.yml" ]] || cat > "$root/.github/ISSUE_TEMPLATE/bug.yml" <<YAML
@@ -276,9 +294,26 @@ body:
         2.
         3.
   - type: textarea
+    id: acceptance
+    attributes:
+      label: 受入条件
+      description: 修正後に観察できる合格条件と回帰条件
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: 検証方法・終了条件・強制停止条件
+      description: 回帰テスト、Draft PRへ進む条件、blocked reportへ切り替える条件
+    validations:
+      required: true
+  - type: textarea
     id: knowledge
     attributes:
-      label: ナレッジログ
+      label: 周回ナレッジログ
+      description: 各周回の未達成条件、判断、証拠、失敗、次の行動
 YAML
 
   [[ -f "$root/.github/pull_request_template.md" ]] || cat > "$root/.github/pull_request_template.md" <<'MD'
