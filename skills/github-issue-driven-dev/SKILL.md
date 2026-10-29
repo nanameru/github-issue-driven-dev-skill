@@ -39,6 +39,14 @@ If the user wants the command on PATH, run:
 scripts/codex-gh-workflow install-bin
 ```
 
+## Checker Record and CI Fallback
+
+The Checker (Devin) independently verifies the Maker's work; the Maker must not approve their own work. Keep Checker results in the GitHub Issue comment as the source of truth, and maintain one PR summary comment by editing it for updates. Use one verdict: `合格`, `不合格`, or `未検証あり`. Merge and deploy decisions belong to a human.
+
+When GitHub Actions cannot run (for example, because of a budget limit), Devin runs the same steps on its VM and labels the record `「代替実行」`. Record the commit SHA, commands, result counts, and timestamp. Before merge, Actions must be run again and pass.
+
+For the auth-state matrix and security gate, refer to the `loop-engineering-dev` skill rather than duplicating those details here.
+
 ## Workflow
 
 1. Check context before editing:
