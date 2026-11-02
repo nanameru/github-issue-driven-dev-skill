@@ -39,6 +39,10 @@ If the user wants the command on PATH, run:
 scripts/codex-gh-workflow install-bin
 ```
 
+## Independent verification with Devin
+
+When independent E2E or security verification is requested, route it through the configured official Devin MCP. After the implementation and local gates, read `references/devin-verification.md` for selection, a copyable request, evidence, and the result handoff. Use the existing `test-case-board` skill for case selection and inventory when available. The Maker remains responsible for checking the returned evidence and recording unresolved gaps; a session being created is not a passing result.
+
 ## Workflow
 
 1. Check context before editing:
