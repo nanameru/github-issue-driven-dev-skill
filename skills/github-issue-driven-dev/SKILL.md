@@ -47,7 +47,8 @@ When independent E2E or security verification is requested, route it through the
 
 For ongoing operation across multiple apps, read `references/app-operations.md` before proposing monitoring, security scans, or on-call setup.
 
-- Keep day-to-day development in Codex. Use Devin selectively for isolated VMs, long-running tests, parallel work, and independent verification.
+- Keep day-to-day code editing in Codex. For iOS or desktop apps that need simulators, devices, browsers, or GUI interaction, use a Devin cloud VM or a platform-matched remote environment instead of local Computer Use.
+- Never let a background or scheduled agent take over the user's local browser or desktop without explicit approval. If the remote environment cannot run a platform-specific check, mark it unverified rather than silently switching to local UI control.
 - Build one shared operational foundation. Classify each app as production, beta, or experiment, and apply Oncall only to production apps.
 - Treat Security Scan and Oncall investigation as read-only. Create fixes in a separate Issue and session, and stop at a Draft PR.
 - Aggregate operations and security notifications in Slack. Route only Critical/High alerts to LINE through a controlled relay. Never guess channel IDs or send secrets in notification payloads.
