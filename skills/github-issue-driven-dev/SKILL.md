@@ -43,6 +43,17 @@ scripts/codex-gh-workflow install-bin
 
 When independent E2E or security verification is requested, route it through the configured official Devin MCP. After the implementation and local gates, read `references/devin-verification.md` for selection, a copyable request, evidence, and the result handoff. Use the existing `test-case-board` skill for case selection and inventory when available. The Maker remains responsible for checking the returned evidence and recording unresolved gaps; a session being created is not a passing result.
 
+## 30-App Operations Baseline
+
+For ongoing operation across multiple apps, read `references/app-operations.md` before proposing monitoring, security scans, or on-call setup.
+
+- Keep day-to-day development in Codex. Use Devin selectively for isolated VMs, long-running tests, parallel work, and independent verification.
+- Build one shared operational foundation. Classify each app as production, beta, or experiment, and apply Oncall only to production apps.
+- Treat Security Scan and Oncall investigation as read-only. Create fixes in a separate Issue and session, and stop at a Draft PR.
+- Aggregate operations and security notifications in Slack. Route only Critical/High alerts to LINE through a controlled relay. Never guess channel IDs or send secrets in notification payloads.
+- Require explicit approval before creating scans, changing integrations, raising cost limits, or performing destructive operations. Never auto-merge or deploy to production.
+- Keep a human accountable for releases, findings, incidents, backups, permissions, and app retirement.
+
 ## Workflow
 
 1. Check context before editing:
