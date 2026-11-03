@@ -34,3 +34,23 @@ scripts/codex-gh-workflow install-bin
 - `npx skills` for installation
 
 GitHubへ書き込めない場合、Skillは `.codex/issue-drafts/` や `.codex/issue-knowledge/` をフォールバックとして使います。
+
+## 30アプリの継続運用
+
+複数アプリを継続運用する場合も、アプリごとに監視・デプロイ・秘密情報管理を個別実装せず、共通基盤を1つ用意します。日常のコード編集はCodexを中心にします。ただし、iOSアプリまたはデスクトップアプリで、シミュレータ・実機・ブラウザ・GUI操作を伴う開発や検証は、ローカルのComputer Useで画面を占有せず、DevinのクラウドVMまたはOS対応の専用リモート環境を標準にします。ユーザーがプロンプトを入力している間や別作業中に、エージェントがブラウザやデスクトップを勝手に操作しないためです。
+
+Linux VMでiOS／macOS固有のビルドやSimulatorを代替できない場合は「未検証」と記録します。ローカル実行へ切り替える必要があるときは、その理由と中断時間を提示し、事前承認を得ます。
+
+監視は運用負荷に応じて3段階に分けます。
+
+| 段階 | 目安 | 標準装備 |
+| --- | ---: | --- |
+| A: 本番 | 3〜5アプリ | 外形監視、Sentry、バックアップ復元試験、Devin Oncall、Security Scan |
+| B: β | 8〜10アプリ | 外形監視、Sentry、Slack通知、Security Scan。Oncallは使わない |
+| C: 実験 | 15〜20アプリ | 最小限のログ・エラー監視と手動確認。Oncallは使わない |
+
+Devin OncallはA段階だけに限定します。Security ScanとOncallの調査結果は読み取り専用で扱い、修正が必要なら別Issue・別セッションでDraft PRを作ります。自動マージ、本番デプロイ、権限変更、削除、課金追加は行いません。
+
+通知はSlackの `#ops-alerts`（障害・稼働）と `#security-weekly`（セキュリティ）へ集約します。LINEはCritical/HighだけをCloudflare Worker等の安全な中継経由で送り、Devinから直接送信させません。チャネルIDは推測せず、接続後にSlack APIから取得した実IDを使います。
+
+運用負荷は、週次30〜60分のトリアージと、月次1〜2時間の棚卸しを基本にします。詳細な段階分け、導入順序、必要な共通装備、承認境界は [`skills/github-issue-driven-dev/references/app-operations.md`](skills/github-issue-driven-dev/references/app-operations.md) を参照してください。

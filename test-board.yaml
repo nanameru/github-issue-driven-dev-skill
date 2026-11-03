@@ -1,0 +1,26 @@
+version: 1
+project:
+  name: github-issue-driven-dev-skill
+  repo: nanameru/github-issue-driven-dev-skill
+source_roots: [skills]
+cases:
+  - id: TC-001
+    title: Devinへの依頼に固定SHAと受入条件と証跡が含まれる
+    feature: Devin独立検証
+    scenario: 固定SHAと証跡を含む引き継ぎ
+    status: todo
+    priority: high
+    type: integration
+    source: [skills/github-issue-driven-dev/SKILL.md, skills/github-issue-driven-dev/references/devin-verification.md]
+    test_file: ''
+    issues: [12]
+  - id: TC-002
+    title: 未検証とSHA変更時の再検証が明示される
+    feature: Devin独立検証
+    scenario: 未検証と再検証
+    status: todo
+    priority: high
+    type: edge
+    source: [skills/github-issue-driven-dev/references/devin-verification.md]
+    test_file: ''
+    issues: [12]
